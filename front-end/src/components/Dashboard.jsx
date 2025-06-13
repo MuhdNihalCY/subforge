@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import DashboardHeader from './DashboardHeader';
 import SubdomainCard from './SubdomainCard';
 import CreateSubdomainModal from './CreateSubdomainModal';
 import BuildLogsPanel from './BuildLogsPanel';
+import MongoDBStatus from './MongoDBStatus';
 import { Filter, Plus, Globe, Activity, Clock, AlertCircle } from 'lucide-react';
 
 const Dashboard = () => {
