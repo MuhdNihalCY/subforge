@@ -1,81 +1,126 @@
 const User = require('../models/User');
+const { successResponse, errorResponse } = require('../utils/responseHandler');
+const catchAsync = require('../utils/catchAsync');
 
-exports.getUsers = async (req, res) => {
-  try {
-    const users = await User.find().select('-__v');
-    res.status(200).json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     Success:
+ *       description: Success response with data
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: true
+ *               message:
+ *                 type: string
+ *               data:
+ *                 type: object
+ *     Error:
+ *       description: Error response
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: false
+ *               message:
+ *                 type: string
+ *               errors:
+ *                 type: object
+ */
+
+/**
+ * Get all users with pagination
+ */
+exports.getUsers = catchAsync(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    User.find().select('-__v').skip(skip).limit(limit),
+    User.countDocuments()
+  ]);
+
+  const pages = Math.ceil(total / limit);
+
+  return successResponse(res, 200, 'Users retrieved successfully', {
+    users,
+    pagination: { total, pages, page, limit }
+  });
+});
+
+/**
+ * Get user by ID
+ */
+exports.getUserById = catchAsync(async (req, res) => {
+  const user = await User.findById(req.params.id).select('-__v');
+  
+  if (!user) {
+    return errorResponse(res, 404, 'User not found');
   }
-};
 
-exports.getUserById = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).select('-__v');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.status(200).json(user);
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-    res.status(500).json({ error: error.message });
+  return successResponse(res, 200, 'User retrieved successfully', { user });
+});
+
+/**
+ * Create new user
+ */
+exports.createUser = catchAsync(async (req, res) => {
+  const { name, email } = req.body;
+
+  // Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return errorResponse(res, 409, 'Email already exists');
   }
-};
 
-exports.createUser = async (req, res) => {
-  try {
-    const { name, email } = req.body;
-    const user = await User.create({ name, email });
-    res.status(201).json(user);
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
-    res.status(400).json({ error: error.message });
+  const user = await User.create({ name, email });
+  return successResponse(res, 201, 'User created successfully', { user });
+});
+
+/**
+ * Update user
+ */
+exports.updateUser = catchAsync(async (req, res) => {
+  const { name, email } = req.body;
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return errorResponse(res, 404, 'User not found');
   }
-};
 
-exports.updateUser = async (req, res) => {
-  try {
-    const { name, email } = req.body;
-    const user = await User.findById(req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+  // Check if email is being changed and is already taken
+  if (email && email !== user.email) {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return errorResponse(res, 409, 'Email already exists');
     }
-
-    user.name = name || user.name;
-    user.email = email || user.email;
-    
-    const updatedUser = await user.save();
-    res.status(200).json(updatedUser);
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-    if (error.code === 11000) {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
-    res.status(400).json({ error: error.message });
   }
-};
 
-exports.deleteUser = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+  user.name = name || user.name;
+  user.email = email || user.email;
+  await user.save();
 
-    await user.deleteOne();
-    res.status(200).json({ message: 'User deleted successfully' });
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-    res.status(500).json({ error: error.message });
+  return successResponse(res, 200, 'User updated successfully', { user });
+});
+
+/**
+ * Delete user
+ */
+exports.deleteUser = catchAsync(async (req, res) => {
+  const user = await User.findByIdAndDelete(req.params.id);
+
+  if (!user) {
+    return errorResponse(res, 404, 'User not found');
   }
-};
+
+  return successResponse(res, 200, 'User deleted successfully');
+});
