@@ -1,4 +1,23 @@
 module.exports = (err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: 'Server Error' });
+
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map(error => error.message);
+    return res.status(400).json({ errors });
+  }
+
+  // Mongoose duplicate key error
+  if (err.code === 11000) {
+    return res.status(400).json({ error: 'Duplicate field value entered' });
+  }
+
+  // Mongoose bad ObjectId
+  if (err.name === 'CastError') {
+    return res.status(400).json({ error: 'Resource not found' });
+  }
+
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
 };
